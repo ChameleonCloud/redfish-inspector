@@ -6,13 +6,14 @@ authors = ["Michael Sherman <shermanm@uchicago.edu>"]
 license = "Apache"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.6.2"
 openstacksdk = "^0.59.0"
 python-ironicclient = "^4.9.0"
 python-keystoneclient = "^4.3.0"
+sushy = "^3.12.0"
 
 [tool.poetry.dev-dependencies]
-black = "^21.9b0"
+black = "^21.10b0"
 isort = "^5.9.3"
 flake8 = "^4.0.1"
 
