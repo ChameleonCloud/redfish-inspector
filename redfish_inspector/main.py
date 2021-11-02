@@ -1,36 +1,36 @@
 #!python3
 
 import argparse
+import concurrent.futures
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from textwrap import indent
 from typing import List, Mapping
-import re
-
-
-import concurrent.futures
-from typing_extensions import final
 
 import openstack
 import sushy
+from openstack import connection
 from openstack.baremetal.v1.node import Node
 from openstack.baremetal.v1.port import Port
 from openstack.cloud import exc
 from sushy import utils
+from sushy.exceptions import AccessError, ConnectionError
 from sushy.main import Sushy
+from sushy.resources import base, common, constants
 from sushy.resources.chassis.chassis import Chassis
 from sushy.resources.system.ethernet_interface import (
     EthernetInterface,
     EthernetInterfaceCollection,
 )
 from sushy.resources.system.processor import Processor
-from sushy.resources.system.storage.storage import Storage
 from sushy.resources.system.storage.drive import Drive
+from sushy.resources.system.storage.storage import Storage
 from sushy.resources.system.system import System
-from sushy.exceptions import ConnectionError, AccessError
-from sushy.resources import base, common, constants
+
+from redfish_inspector import referenceapi
 
 # from urllib3.exceptions import InsecureRequestWarning
 
@@ -52,6 +52,7 @@ def run():
         "limit": "1",
     }
 
+    conn: connection.Connection
     with openstack.connect() as conn:
         # List baremetal servers
         nodes: List[Node]
@@ -59,9 +60,7 @@ def run():
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             future_to_result = {
-                executor.submit(get_node_info, node): node
-                for node in nodes
-                if ("P3" in node.name)
+                executor.submit(get_node_info, node): node for node in nodes
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
@@ -226,7 +225,7 @@ def get_node_info(node):
     mem = system.memory_summary
 
     node_dict["main_memory"] = {
-        "humanized_ram_size": mem.size_gib,
+        "humanized_ram_size": f"{mem.size_gib} GiB",
         "ram_size": _OneE9(mem.size_gib),
     }
     node_dict["monitoring"] = {}
@@ -247,7 +246,7 @@ def get_node_info(node):
                 "interface": link_caps[0].get("LinkNetworkTechnology"),
                 "mac": str.lower(port.mac_address[0]),
                 "model": adapter.model,
-                "rate": link_caps[0].get("LinkSpeedMbps"),
+                "rate": _OneE6(link_caps[0].get("LinkSpeedMbps")),
                 "vendor": adapter.manufacturer,
             }
             node_dict["network_adapters"].append(port_dict)
@@ -277,6 +276,10 @@ def get_node_info(node):
 
     # print(json.dumps(system.json, indent=2, sort_keys=True))
     # print(json.dumps(node_dict, indent=2, sort_keys=True))
+
+    node_obj = referenceapi.ChameleonBaremetal(node_dict)
+
+    node_dict["node_type"] = node_obj.check_node_type()
 
     reference_filename = f"{node.id}.json"
     referencerepo_path = Path(
