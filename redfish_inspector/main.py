@@ -1,13 +1,11 @@
 #!python3
 
-import argparse
+
 import concurrent.futures
 import json
 import logging
 import re
-import sys
 from pathlib import Path
-from textwrap import indent
 from typing import List, Mapping
 
 import openstack
@@ -15,24 +13,21 @@ import sushy
 from openstack import connection
 from openstack.baremetal.v1.node import Node
 from openstack.baremetal.v1.port import Port
-from openstack.cloud import exc
-from sushy import utils
 from sushy.exceptions import AccessError, ConnectionError
-from sushy.main import Sushy
-from sushy.resources import base, common, constants
-from sushy.resources.chassis.chassis import Chassis
-from sushy.resources.system.ethernet_interface import (
-    EthernetInterface,
-    EthernetInterfaceCollection,
-)
 from sushy.resources.system.processor import Processor
 from sushy.resources.system.storage.drive import Drive
-from sushy.resources.system.storage.storage import Storage
-from sushy.resources.system.system import System
 
 from redfish_inspector import referenceapi
+from redfish_inspector.redfish import (
+    NetworkAdapter,
+    NetworkAdapterCollection,
+    NetworkPort,
+    NetworkPortCollection,
+    network_adapters,
+    PcieDevice,
+    pcie_devices,
+)
 
-# from urllib3.exceptions import InsecureRequestWarning
 
 # Initialize and turn on debug logging
 openstack.enable_logging(debug=False)
@@ -60,12 +55,15 @@ def run():
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             future_to_result = {
-                executor.submit(get_node_info, node): node for node in nodes
+                executor.submit(get_node_info, node): node
+                for node in nodes
+                # if ("nc16" in node.name) or ("GPU" in node.name)
+                if ("P3" in node.name)
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
                     data = future.result()
-                except Exception as exc:
+                except AccessError or ConnectionError as exc:
                     print(exc)
 
 
@@ -74,7 +72,7 @@ def _get_dell_oem_processor(proc: Processor) -> Mapping:
 
     try:
         delloem_dict = cpu_dict.get("Oem", {}).get("Dell", {}).get("DellProcessor", {})
-        # print(json.dumps(delloem_dict, indent=2))
+
         return delloem_dict
     except KeyError:
         return {}
@@ -124,6 +122,7 @@ def get_node_info(node):
         "placement": {},
         "network_adapters": [],
         "storage_devices": [],
+        "pcie_devices": [],
         "supported_job_types": {
             "besteffort": False,
             "deploy": True,
@@ -154,8 +153,6 @@ def get_node_info(node):
 
     chassis_json: Mapping = chassis.json
     location = chassis_json.get("Location")
-
-    # print(json.dumps(chassis_json, indent=2))
 
     system_json: Mapping = system.json
     oem_json: Mapping = system_json.get("Oem")
@@ -209,6 +206,35 @@ def get_node_info(node):
         "version": None,
     }
 
+    pcie_devs = pcie_devices(system=system)
+    for dev in pcie_devs:
+
+        # print(json.dumps(dev.json, indent=2))
+        # print(dev.pcie_functions)
+
+        if (
+            (dev.firmware_version)
+            or (dev.part_number)
+            or (dev.serial_number)
+            or ("NVIDIA" in dev.manufacturer)
+        ):
+
+            dev_name = dev.name
+            for func in dev.functions():
+                if func.function_id == 0:
+                    dev_name = func.name
+
+            dev_dict = {
+                "id": dev.identity,
+                "name": dev_name,
+                "manufacturer": dev.manufacturer,
+                "firmware_version": dev.firmware_version,
+                "part_number": dev.part_number,
+                "serial_number": dev.serial_number,
+            }
+
+            node_dict["pcie_devices"].append(dev_dict)
+
     placement_keys = location.get("InfoFormat").split(";")
     placement_vals = location.get("Info").split(";")
     placement_dict = {}
@@ -219,8 +245,6 @@ def get_node_info(node):
         "node": placement_dict.get("RackSlot"),
         "rack": placement_dict.get("RackName"),
     }
-
-    node_dict["gpu"] = {}
 
     mem = system.memory_summary
 
@@ -261,7 +285,6 @@ def get_node_info(node):
 
             size_in_gb = int(drive.capacity_bytes / (1e9))
 
-            # print(json.dumps(item.json, indent=2))
             storage_dict = {
                 "device": drive.identity,
                 # "driver": "megaraid_sas",
@@ -271,6 +294,7 @@ def get_node_info(node):
                 "rev": drive_dict.get("Revision"),
                 "size": drive.capacity_bytes,
                 "vendor": drive.manufacturer,
+                "media_type": drive.media_type,
             }
             node_dict["storage_devices"].append(storage_dict)
 
@@ -281,6 +305,15 @@ def get_node_info(node):
 
     node_dict["node_type"] = node_obj.check_node_type()
 
+    gpu_dict = node_obj.get_gpus()
+    if gpu_dict.get("gpu"):
+        node_dict["gpu"] = gpu_dict
+
+    if node_obj.check_infiniband():
+        node_dict["infiniband"] = True
+
+    # node_dict.pop("pcie_devices")
+
     reference_filename = f"{node.id}.json"
     referencerepo_path = Path(
         "reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
@@ -290,93 +323,3 @@ def get_node_info(node):
     with open(output_file, "w+") as f:
         json.dump(node_dict, f, indent=2, sort_keys=True)
         print(f"generated {output_file}")
-
-
-def network_adapters(chassis: Chassis):
-    """Property to reference `NetworkAdapterCollection` instance
-
-    It is set once when the first time it is queried. On refresh,
-    this property is marked as stale (greedy-refresh not done).
-    Here the actual refresh of the sub-resource happens, if stale.
-    """
-    return NetworkAdapterCollection(
-        chassis._conn,
-        utils.get_sub_resource_path_by(chassis, "NetworkAdapters"),
-        redfish_version=chassis.redfish_version,
-        registries=chassis.registries,
-        root=chassis.root,
-    )
-
-
-class NetworkPort(base.ResourceBase):
-    identity = base.Field("Id", required=True)
-    """The Ethernet adapter identity string"""
-
-    name = base.Field("Name")
-    """The name of the resource or array element"""
-
-    mac_address = base.Field("AssociatedNetworkAddresses")
-
-    link_capabilities = base.Field("SupportedLinkCapabilities")
-    current_link_type = base.Field("ActiveLinkTechnology")
-    current_link_speed_mbps = base.Field("CurrentLinkSpeedMbps")
-
-
-class NetworkPortCollection(base.ResourceCollectionBase):
-    @property
-    def _resource_type(self):
-        return NetworkPort
-
-
-class NetworkAdapter(base.ResourceBase):
-    """This class adds the NetworkAdapter resource"""
-
-    identity = base.Field("Id", required=True)
-    """The Ethernet adapter identity string"""
-
-    name = base.Field("Name")
-    """The name of the resource or array element"""
-
-    model = base.Field("Model")
-    """Model"""
-
-    manufacturer = base.Field("Manufacturer")
-    """Manufacturer"""
-
-    def ports(self) -> NetworkPortCollection:
-        return NetworkPortCollection(
-            self._conn,
-            utils.get_sub_resource_path_by(self, "NetworkPorts"),
-            redfish_version=self.redfish_version,
-            registries=self.registries,
-            root=self.root,
-        )
-
-    status = common.StatusField("Status")
-    """Describes the status and health of this adapter."""
-
-
-class NetworkAdapterCollection(base.ResourceCollectionBase):
-    @property
-    def _resource_type(self):
-        return NetworkAdapter
-
-    @property
-    @utils.cache_it
-    def summary(self):
-        """Summary of MAC addresses and adapters state
-
-        This filters the MACs whose health is OK,
-        which means the MACs in both 'Enabled' and 'Disabled' States
-        are returned.
-
-        :returns: dictionary in the format
-            {'aa:bb:cc:dd:ee:ff': sushy.STATE_ENABLED,
-            'aa:bb:aa:aa:aa:aa': sushy.STATE_DISABLED}
-        """
-        mac_dict = {}
-        for eth in self.get_members():
-            if eth.mac_address is not None and eth.status is not None:
-                if eth.status.health == constants.HEALTH_OK:
-                    mac_dict[eth.mac_address] = eth.status.state
-        return mac_dict
