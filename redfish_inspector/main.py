@@ -52,8 +52,8 @@ def run():
             future_to_result = {
                 executor.submit(get_node_info, node): node
                 for node in nodes
-                if ("nc16" in node.name) or ("GPU" in node.name)
-                # if ("P3" in node.name)
+                # if ("nc16" in node.name) or ("GPU" in node.name)
+                if ("P3" in node.name)
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
@@ -100,7 +100,6 @@ def get_node_info(node: Node):
 
     chassis = conn.get_chassis(CHASSIS_PATH)
     reference_node.set_chassis(chassis)
-    # reference_node.set_storage(chassis)
 
     ironic_mac = []
     port_query = {"node_id": node.id, "fields": ["address"]}
@@ -121,99 +120,33 @@ def get_node_info(node: Node):
             # print(port.mac_address, ironic_mac)
             reference_node.add_network_port(adapter, port, enabled)
 
-    # reference_node.set_network(chassis)
+    for pcie_dev in pcie_devices(system=system):
+        reference_node.add_pcie_dev(pcie_dev)
 
-    # chassis_json: Mapping = chassis.json
-    # location = chassis_json.get("Location")
+    reference_node.get_gpus()
 
-    # system_json: Mapping = system.json
-    # oem_json: Mapping = system_json.get("Oem")
+    reference_node.set_location(chassis)
 
-    # pcie_devs = pcie_devices(system=system)
-    # for dev in pcie_devs:
+    for controller in system.storage.get_members():
+        drive: Drive
+        for drive in controller.drives:
+            reference_node.add_storage(drive)
 
-    #     # print(json.dumps(dev.json, indent=2))
-    #     # print(dev.pcie_functions)
+    reference_node.check_infiniband()
 
-    #     if (
-    #         (dev.firmware_version)
-    #         or (dev.part_number)
-    #         or (dev.serial_number)
-    #         or ("NVIDIA" in dev.manufacturer)
-    #     ):
-
-    #         dev_name = dev.name
-    #         for func in dev.functions():
-    #             if func.function_id == 0:
-    #                 dev_name = func.name
-
-    #         dev_dict = {
-    #             "id": dev.identity,
-    #             "name": dev_name,
-    #             "manufacturer": dev.manufacturer,
-    #             "firmware_version": dev.firmware_version,
-    #             "part_number": dev.part_number,
-    #             "serial_number": dev.serial_number,
-    #         }
-
-    #         node_dict["pcie_devices"].append(dev_dict)
-
-    # placement_keys = location.get("InfoFormat").split(";")
-    # placement_vals = location.get("Info").split(";")
-    # placement_dict = {}
-    # for key, value in zip(placement_keys, placement_vals):
-    #     placement_dict[key] = value
-
-    # node_dict["placement"] = {
-    #     "node": placement_dict.get("RackSlot"),
-    #     "rack": placement_dict.get("RackName"),
-    # }
-
-    # for controller in system.storage.get_members():
-    #     drives = controller.drives
-
-    #     drive: Drive
-    #     for drive in drives:
-    #         storage_dict = {}
-    #         drive_dict: Mapping = drive.json
-
-    #         size_in_gb = int(drive.capacity_bytes / (1e9))
-
-    #         storage_dict = {
-    #             "device": drive.identity,
-    #             # "driver": "megaraid_sas",
-    #             "humanized_size": f"{size_in_gb} GB",
-    #             "interface": drive_dict.get("Protocol"),
-    #             "model": drive.model,
-    #             "rev": drive_dict.get("Revision"),
-    #             "size": drive.capacity_bytes,
-    #             "vendor": drive.manufacturer,
-    #             "media_type": drive.media_type,
-    #         }
-    #         node_dict["storage_devices"].append(storage_dict)
-
-    # print(json.dumps(system.json, indent=2, sort_keys=True))
-    # print(json.dumps(node_dict, indent=2, sort_keys=True))
-
-    # node_obj = referenceapi.ChameleonBaremetal(node_dict)
-
-    # node_dict["node_type"] = node_obj.check_node_type()
-
-    # gpu_dict = node_obj.get_gpus()
-    # if gpu_dict.get("gpu"):
-    #     node_dict["gpu"] = gpu_dict
-
-    # if node_obj.check_infiniband():
-    #     node_dict["infiniband"] = True
-
-    # node_dict.pop("pcie_devices")
-
+    reference_node.check_node_type()
     reference_filename = f"{node.id}.json"
     referencerepo_path = Path(
         "reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
     )
 
+    output_dict: Mapping = reference_node.json()
+    # remove entries not in current referenceapi
+    output_dict.pop("pcie_devices")
+    if not output_dict.get("gpu"):
+        output_dict.pop("gpu")
+
     output_file = Path(referencerepo_path, reference_filename)
     with open(output_file, "w+") as f:
-        json.dump(reference_node.json(), f, indent=2, sort_keys=True)
+        json.dump(output_dict, f, indent=2, sort_keys=True)
         print(f"generated {output_file}")

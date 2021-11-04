@@ -3,11 +3,13 @@
 import json
 from typing import Mapping, List
 from openstack.baremetal.v1.node import Node
+from sushy import utils
 from sushy.resources.chassis.chassis import Chassis
 from sushy.resources.system.system import System
 from sushy.resources.system import processor
 from sushy.resources.system.processor import Processor
-from redfish_inspector.redfish import NetworkPort, NetworkAdapter
+from redfish_inspector.redfish import NetworkPort, NetworkAdapter, PcieDevice
+from sushy.resources.system.storage.drive import Drive
 
 
 class G5kNode:
@@ -17,22 +19,6 @@ class G5kNode:
 
     def json(self):
         return self.__dict__
-
-
-# class NetworkInterface:
-#     pass
-
-
-# class chassis:
-#     pass
-
-
-# class processor:
-#     pass
-
-
-# class Gpu:
-#     pass
 
 
 class ChameleonBaremetal(G5kNode):
@@ -50,14 +36,11 @@ class ChameleonBaremetal(G5kNode):
         "serial": None,
     }
 
-    # gpu = {
-    #     "gpu": False,
-    # }
-
-    # GPU_TYPES = (
-    #     "TU102GL [Quadro RTX 6000/8000]",
-    #     "GV100GL [Tesla V100 SXM2 32GB]",
-    # )
+    # Map reported codename to friendly name
+    GPU_MAPPING = {
+        "TU102GL [Quadro RTX 6000/8000]": "RTX 6000",
+        "GV100GL [Tesla V100 SXM2 32GB]": "V100",
+    }
 
     def __init__(self, node: Node):
         self.uid = node.id
@@ -66,6 +49,8 @@ class ChameleonBaremetal(G5kNode):
         self.supported_job_types = ChameleonBaremetal.supported_job_types
         self.network_adapters = []
         self.pcie_devices = []
+        self.storage_devices = []
+        self.gpu = {}
 
     def from_dict(self, node_dict: Mapping):
         for key, value in node_dict.items():
@@ -103,15 +88,15 @@ class ChameleonBaremetal(G5kNode):
         self.processor = {
             "instruction_set": proc.instruction_set,
             "model": proc.model,
-            "other_description": proc.model,
+            # "other_description": proc.model,
             "vendor": proc.manufacturer,
-            "version": {
-                "family": proc.processor_id.effective_family,
-                "model": proc.processor_id.effective_model,
-                "cpuid": proc.processor_id.identification_registers,
-                "microcode": proc.processor_id.microcode_info,
-                "step": proc.processor_id.step,
-            },
+            # "version": {
+            #     "family": proc.processor_id.effective_family,
+            #     "model": proc.processor_id.effective_model,
+            #     "cpuid": proc.processor_id.identification_registers,
+            #     "microcode": proc.processor_id.microcode_info,
+            #     "step": proc.processor_id.step,
+            # },
         }
 
         delloem: Mapping = (
@@ -127,8 +112,6 @@ class ChameleonBaremetal(G5kNode):
                 }
             )
 
-        # print(json.dumps(delloem, indent=2))
-
     def set_chassis(self, chassis: Chassis):
         self.chassis = {
             "manufacturer": chassis.manufacturer,
@@ -136,41 +119,98 @@ class ChameleonBaremetal(G5kNode):
             "serial": chassis.sku,
         }
 
+    def set_location(self, chassis: Chassis):
+        """Get physical location from BMC info."""
+
+        location: Mapping = chassis.json.get("Location")
+
+        placement_keys = location.get("InfoFormat", "").split(";")
+        placement_vals = location.get("Info", "").split(";")
+        placement_dict = {}
+        for key, value in zip(placement_keys, placement_vals):
+            placement_dict[key] = value
+
+        self.placement = {
+            "node": placement_dict.get("RackSlot"),
+            "rack": placement_dict.get("RackName"),
+        }
+
     def add_network_port(
         self, adapter: NetworkAdapter, port: NetworkPort, enabled: bool
     ):
 
         link_caps = port.link_capabilities
+        link_speed_mbps = link_caps[0].get("LinkSpeedMbps")
+        if link_speed_mbps:
+            rate = int(link_speed_mbps) * int(1e6)
+        else:
+            rate = 0
+
         port_dict = {
             "device": port.identity,
             "interface": link_caps[0].get("LinkNetworkTechnology"),
             "mac": str.lower(port.mac_address[0]),
             "model": adapter.model,
-            "rate": int(link_caps[0].get("LinkSpeedMbps") * 1e6),
+            "rate": rate,
             "vendor": adapter.manufacturer,
             "enabled": enabled,
+            "management": False,
         }
         self.network_adapters.append(port_dict)
 
+    def add_storage(self, drive: Drive):
+        size_in_gb = int(drive.capacity_bytes / (1e9))
+
+        storage_dict = {
+            "device": drive.identity,
+            # "driver": "megaraid_sas",
+            "humanized_size": f"{size_in_gb} GB",
+            "interface": drive.json.get("Protocol"),
+            "model": drive.model,
+            "rev": drive.json.get("Revision"),
+            "size": drive.capacity_bytes,
+            "vendor": drive.manufacturer,
+            "media_type": drive.media_type,
+            # "serial_number": drive.serial_number,
+            # "part_number": drive.part_number,
+        }
+        self.storage_devices.append(storage_dict)
+
+    def add_pcie_dev(self, dev: PcieDevice):
+
+        # don't add dummy devices
+        # if dev.firmware_version or dev.part_number or dev.serial_number:
+        # the first "function" is usually the main devices
+        dev_name = dev.name
+        for func in dev.functions():
+            if func.function_id == 0:
+                dev_name = func.name
+
+        dev_dict = {
+            "id": dev.identity,
+            "name": dev_name,
+            "manufacturer": dev.manufacturer,
+            "firmware_version": dev.firmware_version,
+            "part_number": dev.part_number,
+            "serial_number": dev.serial_number,
+        }
+        self.pcie_devices.append(dev_dict)
+
     def get_gpus(self):
 
-        gpu_dict = self.gpu.copy()
-
         for device in self.pcie_devices:
-            if device.get("name") in self.GPU_TYPES:
-                gpu_dict["gpu"] = True
-                gpu_dict["gpu_model"] = device.get("name")
-                gpu_dict["gpu_vendor"] = device.get("manufacturer")
-                gpu_dict["gpu_count"] = gpu_dict.get("gpu_count", 0) + 1
-        return gpu_dict
+            if device.get("name") in self.GPU_MAPPING.keys():
+                gpu_model = self.GPU_MAPPING[device.get("name")]
+                self.gpu["gpu"] = True
+                self.gpu["gpu_model"] = gpu_model
+                self.gpu["gpu_name"] = device.get("name")
+                self.gpu["gpu_vendor"] = device.get("manufacturer")
+                self.gpu["gpu_count"] = self.gpu.get("gpu_count", 0) + 1
 
     def check_infiniband(self):
-        ifaces: List[Mapping] = self.network_adapters.copy()
-        for dev in ifaces:
+        for dev in self.network_adapters:
             if dev.get("interface") == "InfiniBand":
-                return True
-            else:
-                return False
+                self.infiniband = True
 
     def check_node_type(self):
 
@@ -180,7 +220,11 @@ class ChameleonBaremetal(G5kNode):
 
         chassis_model: str = self.chassis.get("name")
 
-        if "R740" in chassis_model:
+        if self.gpu.get("gpu"):
+            node_class = "gpu"
+            variant = self.gpu.get("gpu_model", "").replace(" ", "_").lower()
+
+        elif "R740" in chassis_model:
             node_class = "compute"
         elif "R6515" in chassis_model:
             node_class = "mgmt"
@@ -198,6 +242,8 @@ class ChameleonBaremetal(G5kNode):
             cpu_series = "cascadelake_r"
 
         if node_class == "compute":
-            return f"{node_class}_{cpu_series}"
+            self.node_type = f"{node_class}_{cpu_series}"
+        elif node_class == "gpu":
+            self.node_type = f"{node_class}_{variant}"
         else:
-            return node_class
+            self.node_type = node_class
