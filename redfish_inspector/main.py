@@ -31,6 +31,16 @@ logging.captureWarnings(True)
 
 CHASSIS_PATH = "/redfish/v1/Chassis/System.Embedded.1"
 
+NODE_NAMES = (
+    # "nc45",
+    "P3-CPU-038",
+    "P3-SSD-010",
+    # "P3-CPU-039",
+    # "P3-CPU-040",
+    # "P3-CPU-041",
+    # "P3-CPU-042",
+)
+
 
 def run():
     node_query = {
@@ -52,8 +62,7 @@ def run():
             future_to_result = {
                 executor.submit(get_node_info, node): node
                 for node in nodes
-                # if ("nc16" in node.name) or ("GPU" in node.name)
-                if ("P3" in node.name)
+                if node.name in NODE_NAMES
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
@@ -134,10 +143,10 @@ def get_node_info(node: Node):
 
     reference_node.check_infiniband()
 
-    reference_node.check_node_type()
+    # reference_node.check_node_type()
     reference_filename = f"{node.id}.json"
     referencerepo_path = Path(
-        "reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
+        "../reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
     )
 
     output_dict: Mapping = reference_node.json()

@@ -1,15 +1,18 @@
 #!python3
 
 import json
-from typing import Mapping, List
+from typing import List, Mapping
+
 from openstack.baremetal.v1.node import Node
 from sushy import utils
 from sushy.resources.chassis.chassis import Chassis
-from sushy.resources.system.system import System
 from sushy.resources.system import processor
 from sushy.resources.system.processor import Processor
-from redfish_inspector.redfish import NetworkPort, NetworkAdapter, PcieDevice
 from sushy.resources.system.storage.drive import Drive
+from sushy.resources.system.system import System
+
+from redfish_inspector.cpuid import lookup
+from redfish_inspector.redfish import NetworkAdapter, NetworkPort, PcieDevice
 
 
 class G5kNode:
@@ -85,32 +88,28 @@ class ChameleonBaremetal(G5kNode):
         self.monitoring = {"wattmeter": False}
 
     def set_processor(self, proc: Processor):
-        self.processor = {
-            "instruction_set": proc.instruction_set,
-            "model": proc.model,
-            # "other_description": proc.model,
-            "vendor": proc.manufacturer,
-            # "version": {
-            #     "family": proc.processor_id.effective_family,
-            #     "model": proc.processor_id.effective_model,
-            #     "cpuid": proc.processor_id.identification_registers,
-            #     "microcode": proc.processor_id.microcode_info,
-            #     "step": proc.processor_id.step,
-            # },
-        }
+
+        proc_dict = proc.json
+        proc_default_class = lookup.CPU_MODEL_MAPPING.get(proc.model)
+        self.processor = proc_default_class.get_reference_json()
 
         delloem: Mapping = (
-            proc.json.get("Oem", {}).get("Dell", {}).get("DellProcessor", {})
+            proc_dict.get("Oem", {}).get("Dell", {}).get("DellProcessor", {})
         )
-        if delloem:
-            self.processor.update(
-                {
-                    "clock_speed": int(delloem.get("CurrentClockSpeedMhz", 0) * 1e6),
-                    "cache_l1": int(delloem.get("Cache1SizeKB", 0) * 1e3),
-                    "cache_l2": int(delloem.get("Cache2SizeKB", 0) * 1e3),
-                    "cache_l3": int(delloem.get("Cache3SizeKB", 0) * 1e3),
-                }
-            )
+        redfish_values = {
+            "other_description": proc.model,
+            "vendor": proc.manufacturer,
+            "version": proc_dict.get("Version"),
+            "clock_speed": int(delloem.get("CurrentClockSpeedMhz", 0) * 1e6),
+            "cache_l1": int(delloem.get("Cache1SizeKB", 0) * 1e3),
+            "cache_l2": int(delloem.get("Cache2SizeKB", 0) * 1e3),
+            "cache_l3": int(delloem.get("Cache3SizeKB", 0) * 1e3),
+        }
+
+        for k, v in redfish_values.items():
+            if v:
+
+                self.processor.update({k: v})
 
     def set_chassis(self, chassis: Chassis):
         self.chassis = {
