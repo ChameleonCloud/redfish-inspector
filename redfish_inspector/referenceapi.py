@@ -63,8 +63,14 @@ class ChameleonBaremetal(G5kNode):
         cpu_summary = system.processors.summary
         sockets = len(system.processors.get_members())
 
+        arch = cpu_summary.architecture
+        if "x86-64" in arch:
+            platform_type = "x86_64"
+        else:
+            platform_type = arch
+
         self.architecture = {
-            "platform_type": cpu_summary.architecture,
+            "platform_type": platform_type,
             "smp_size": sockets,
             "smt_size": cpu_summary.count,
         }

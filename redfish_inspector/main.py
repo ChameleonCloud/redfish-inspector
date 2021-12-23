@@ -143,7 +143,7 @@ def get_node_info(node: Node):
 
     reference_node.check_infiniband()
 
-    # reference_node.check_node_type()
+    reference_node.check_node_type()
     reference_filename = f"{node.id}.json"
     referencerepo_path = Path(
         "../reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
