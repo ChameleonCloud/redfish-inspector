@@ -73,8 +73,10 @@ class PcieFunction(base.ResourceBase):
     name = base.Field("Name")
     """The name of the resource or array element"""
 
+    description = base.Field("Description")
+    device_class = base.Field("DeviceClass")
+    class_code = base.Field("ClassCode")
     function_id = base.Field("FunctionId")
-
     subsystem_id = base.Field("SubsystemId")
     subsystem_vendor_id = base.Field("SubsystemVendorId")
     device_id = base.Field("DeviceId")

@@ -15,6 +15,21 @@ from redfish_inspector.cpuid import lookup
 from redfish_inspector.redfish import NetworkAdapter, NetworkPort, PcieDevice
 
 
+class ALVEO_U280(object):
+    board_model = "Alveo U280"
+    board_vendor = "Xilinx Corporation"
+    fpga_model = "XCU280"
+    fpga_vendor = "Xilinx Corporation"
+
+
+FPGA_MAPPING = {
+    "Xilinx Corporation": {
+        "0x500c": ALVEO_U280(),
+        "0x500d": ALVEO_U280(),
+    }
+}
+
+
 class G5kNode:
     uid = None
     node_type = None
@@ -61,7 +76,13 @@ class ChameleonBaremetal(G5kNode):
 
     def set_arch(self, system: System):
         cpu_summary = system.processors.summary
-        sockets = len(system.processors.get_members())
+
+        processors = [
+            proc
+            for proc in system.processors.get_members()
+            if proc.json.get("ProcessorType") == "CPU"
+        ]
+        sockets = len(processors)
 
         arch = cpu_summary.architecture
         if "x86-64" in arch:
@@ -97,7 +118,11 @@ class ChameleonBaremetal(G5kNode):
 
         proc_dict = proc.json
         proc_default_class = lookup.CPU_MODEL_MAPPING.get(proc.model)
-        self.processor = proc_default_class.get_reference_json()
+        try:
+            self.processor = proc_default_class.get_reference_json()
+        except AttributeError:
+            print(json.dumps(proc.json, indent=2))
+            raise
 
         delloem: Mapping = (
             proc_dict.get("Oem", {}).get("Dell", {}).get("DellProcessor", {})
@@ -143,24 +168,21 @@ class ChameleonBaremetal(G5kNode):
     def add_network_port(
         self, adapter: NetworkAdapter, port: NetworkPort, enabled: bool
     ):
-
         link_caps = port.link_capabilities
-        link_speed_mbps = link_caps[0].get("LinkSpeedMbps")
-        if link_speed_mbps:
-            rate = int(link_speed_mbps) * int(1e6)
-        else:
-            rate = 0
-
         port_dict = {
             "device": port.identity,
             "interface": link_caps[0].get("LinkNetworkTechnology"),
             "mac": str.lower(port.mac_address[0]),
             "model": adapter.model,
-            "rate": rate,
             "vendor": adapter.manufacturer,
             "enabled": enabled,
             "management": False,
         }
+
+        link_speed_bps = link_caps[0].get("LinkSpeedMbps", 0)
+        if link_speed_bps:
+            port_dict.setdefault("rate", int(link_speed_bps * 1e6))
+
         self.network_adapters.append(port_dict)
 
     def add_storage(self, drive: Drive):
@@ -187,9 +209,23 @@ class ChameleonBaremetal(G5kNode):
         # if dev.firmware_version or dev.part_number or dev.serial_number:
         # the first "function" is usually the main devices
         dev_name = dev.name
-        for func in dev.functions():
-            if func.function_id == 0:
-                dev_name = func.name
+
+        # functions = []
+        # for func in dev.functions():
+        #     functions.append(
+        #         {
+        #             "name": func.name,
+        #             "device_class": func.device_class,
+        #             "class_code": func.class_code,
+        #             "description": func.description,
+        #             "SubsystemId": func.subsystem_id,
+        #             "SubsystemVendorId": func.subsystem_vendor_id,
+        #             "DeviceID": func.device_id,
+        #             "VendorID": func.vendor_id,
+        #         }
+        #     )
+
+        func = next(dev.functions())
 
         dev_dict = {
             "id": dev.identity,
@@ -198,7 +234,14 @@ class ChameleonBaremetal(G5kNode):
             "firmware_version": dev.firmware_version,
             "part_number": dev.part_number,
             "serial_number": dev.serial_number,
+            "device_class": func.device_class,
+            "VendorID": func.vendor_id,
+            "DeviceID": func.device_id,
         }
+        # if func.device_class in (
+        #     "ProcessingAccelerators",
+        #     "NetworkController",
+        # ):
         self.pcie_devices.append(dev_dict)
 
     def get_gpus(self):
@@ -211,6 +254,22 @@ class ChameleonBaremetal(G5kNode):
                 self.gpu["gpu_name"] = device.get("name")
                 self.gpu["gpu_vendor"] = device.get("manufacturer")
                 self.gpu["gpu_count"] = self.gpu.get("gpu_count", 0) + 1
+
+    def get_fgpas(self):
+        for device in self.pcie_devices:
+            manufacturer = device.get("manufacturer")
+            fpga_dict = FPGA_MAPPING.get(manufacturer, {})
+
+            device_id = device.get("DeviceID")
+            fpga_class = fpga_dict.get(device_id)
+
+            if fpga_class:
+                self.fpga = {
+                    "board_vendor": fpga_class.board_vendor,
+                    "board_model": fpga_class.board_model,
+                    "fpga_vendor": fpga_class.fpga_vendor,
+                    "fpga_model": fpga_class.fpga_model,
+                }
 
     def check_infiniband(self):
         for dev in self.network_adapters:
@@ -240,7 +299,7 @@ class ChameleonBaremetal(G5kNode):
         elif "R840" in chassis_model:
             node_class = "compute_nvdimm"
 
-        cpu_model: str = self.processor.get("model")
+        cpu_model: str = self.processor.get("other_description")
         if "Gold 6126" in cpu_model:
             cpu_series = "skylake"
         if "Gold 6240R" in cpu_model:

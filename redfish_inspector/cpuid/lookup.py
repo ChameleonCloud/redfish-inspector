@@ -89,6 +89,16 @@ class IntelXeonGold6126(GenuineIntel, RedfishProc):
         }
 
 
+class IntelXeonGold6230(GenuineIntel, RedfishProc):
+    def __init__(self) -> None:
+        super().__init__()
+
+
+class IntelXeonPlatinum8276(GenuineIntel, RedfishProc):
+    def __init__(self) -> None:
+        super().__init__()
+
+
 class AuthenticAMD(ReferenceProc):
     def __init__(self) -> None:
         super().__init__()
@@ -115,4 +125,6 @@ CPU_MODEL_MAPPING = {
     "AMD EPYC 7352 24-Core Processor": AMD_7352(),
     "Intel(R) Xeon(R) Gold 6240R CPU @ 2.40GHz": IntelXeonGold6240R(),
     "Intel(R) Xeon(R) Gold 6126 CPU @ 2.60GHz": IntelXeonGold6126(),
+    "Intel(R) Xeon(R) Platinum 8276 CPU @ 2.20GHz": IntelXeonPlatinum8276(),
+    "Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz": IntelXeonGold6230(),
 }

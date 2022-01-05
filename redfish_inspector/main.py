@@ -32,14 +32,16 @@ logging.captureWarnings(True)
 CHASSIS_PATH = "/redfish/v1/Chassis/System.Embedded.1"
 
 NODE_NAMES = (
-    # "nc45",
-    "P3-CPU-038",
-    "P3-SSD-010",
+    # # "nc45",
+    # "P3-CPU-038",
+    # "P3-SSD-010",
     # "P3-CPU-039",
     # "P3-CPU-040",
     # "P3-CPU-041",
     # "P3-CPU-042",
 )
+
+NODE_SUBSTR = "P3-SSD"
 
 
 def run():
@@ -62,7 +64,7 @@ def run():
             future_to_result = {
                 executor.submit(get_node_info, node): node
                 for node in nodes
-                if node.name in NODE_NAMES
+                if (node.name in NODE_NAMES) or (NODE_SUBSTR in node.name)
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
@@ -133,6 +135,7 @@ def get_node_info(node: Node):
         reference_node.add_pcie_dev(pcie_dev)
 
     reference_node.get_gpus()
+    reference_node.get_fgpas()
 
     reference_node.set_location(chassis)
 
