@@ -28,6 +28,13 @@ FPGA_MAPPING = {
     }
 }
 
+# Map reported codename to friendly name
+GPU_MAPPING = {
+    "TU102GL [Quadro RTX 6000/8000]": "RTX 6000",
+    "GV100GL [Tesla V100 SXM2 32GB]": "V100",
+    "GV100GL [Tesla V100 PCIe 32GB]": "V100",
+}
+
 
 class G5kNode:
     uid = None
@@ -51,12 +58,6 @@ class ChameleonBaremetal(G5kNode):
         "manufacturer": None,
         "name": None,
         "serial": None,
-    }
-
-    # Map reported codename to friendly name
-    GPU_MAPPING = {
-        "TU102GL [Quadro RTX 6000/8000]": "RTX 6000",
-        "GV100GL [Tesla V100 SXM2 32GB]": "V100",
     }
 
     def __init__(self, node: Node):
@@ -241,8 +242,8 @@ class ChameleonBaremetal(G5kNode):
     def get_gpus(self):
 
         for device in self.pcie_devices:
-            if device.get("name") in self.GPU_MAPPING.keys():
-                gpu_model = self.GPU_MAPPING[device.get("name")]
+            if device.get("name") in GPU_MAPPING.keys():
+                gpu_model = GPU_MAPPING[device.get("name")]
                 self.gpu["gpu"] = True
                 self.gpu["gpu_model"] = gpu_model
                 self.gpu["gpu_name"] = device.get("name")
