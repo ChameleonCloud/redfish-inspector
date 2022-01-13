@@ -14,6 +14,7 @@ from openstack import connection
 from openstack.baremetal.v1.node import Node
 from openstack.baremetal.v1.port import Port
 from sushy.exceptions import AccessError, ConnectionError
+from sushy.resources.system import constants as sys_consts
 from sushy.resources.system.processor import Processor
 from sushy.resources.system.storage.drive import Drive
 
@@ -31,17 +32,7 @@ logging.captureWarnings(True)
 
 CHASSIS_PATH = "/redfish/v1/Chassis/System.Embedded.1"
 
-NODE_NAMES = (
-    # # "nc45",
-    # "P3-CPU-038",
-    # "P3-SSD-010",
-    # "P3-CPU-039",
-    # "P3-CPU-040",
-    # "P3-CPU-041",
-    # "P3-CPU-042",
-)
-
-NODE_SUBSTR = "P3-SSD"
+NODE_NAMES = ["P3-GPU-012"]
 
 
 def run():
@@ -64,7 +55,7 @@ def run():
             future_to_result = {
                 executor.submit(get_node_info, node): node
                 for node in nodes
-                if (node.name in NODE_NAMES) or (NODE_SUBSTR in node.name)
+                if (node.name in NODE_NAMES)
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
@@ -105,7 +96,11 @@ def get_node_info(node: Node):
     reference_node.set_memory(system)
     reference_node.set_monitoring()
 
-    processors: List[Processor] = system.processors.get_members()
+    processors: List[Processor] = [
+        proc
+        for proc in system.processors.get_members()
+        if proc.processor_type == sys_consts.PROCESSOR_TYPE_CPU
+    ]
     cpu = processors[0]
     reference_node.set_processor(cpu)
 
