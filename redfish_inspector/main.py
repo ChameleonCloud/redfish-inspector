@@ -45,6 +45,13 @@ def run():
         help="ironic node name to scrape",
     )
 
+    parser.add_argument(
+        "--output-path",
+        type=Path,
+        default=".",
+        help="path to reference-repository subdir for your cluster",
+    )
+
     args = parser.parse_args()
 
     node_query = {
@@ -64,7 +71,7 @@ def run():
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             future_to_result = {
-                executor.submit(get_node_info, node): node
+                executor.submit(get_node_info, node, args): node
                 for node in nodes
                 if (node.name.lower() in args.node_names)
             }
@@ -75,7 +82,7 @@ def run():
                     print(exc)
 
 
-def get_node_info(node: Node):
+def get_node_info(node: Node, args: argparse.Namespace):
 
     # print(node.name, node.id, node.properties)
     bmc_addr = node.driver_info.get("ipmi_address")
@@ -155,7 +162,8 @@ def get_node_info(node: Node):
     reference_node.check_node_type()
     reference_filename = f"{node.id}.json"
     referencerepo_path = Path(
-        "../reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
+        args.output_path
+        # "../reference-repository/data/chameleoncloud/sites/uc/clusters/chameleon/nodes"
     )
 
     output_dict: Mapping = reference_node.json()
