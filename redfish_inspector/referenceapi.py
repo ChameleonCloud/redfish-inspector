@@ -171,7 +171,6 @@ class ChameleonBaremetal(G5kNode):
             "model": adapter.model,
             "vendor": adapter.manufacturer,
             "enabled": enabled,
-            "management": False,
         }
 
         link_speed_bps = link_caps[0].get("LinkSpeedMbps", 0)
