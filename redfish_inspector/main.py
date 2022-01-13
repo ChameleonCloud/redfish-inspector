@@ -1,6 +1,7 @@
 #!python3
 
 
+import argparse
 import concurrent.futures
 import json
 import logging
@@ -32,10 +33,20 @@ logging.captureWarnings(True)
 
 CHASSIS_PATH = "/redfish/v1/Chassis/System.Embedded.1"
 
-NODE_NAMES = ["P3-GPU-012"]
-
 
 def run():
+    parser = argparse.ArgumentParser(description="Scrape Redfish Info.")
+    parser.add_argument(
+        "--name",
+        dest="node_names",
+        default=[],
+        type=str,
+        action="append",
+        help="ironic node name to scrape",
+    )
+
+    args = parser.parse_args()
+
     node_query = {
         "fields": [
             "name",
@@ -55,7 +66,7 @@ def run():
             future_to_result = {
                 executor.submit(get_node_info, node): node
                 for node in nodes
-                if (node.name in NODE_NAMES)
+                if (node.name.lower() in args.node_names)
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
