@@ -11,7 +11,6 @@ from sushy.resources.system.processor import Processor
 from sushy.resources.system.storage.drive import Drive
 from sushy.resources.system.system import System
 
-from redfish_inspector.cpuid import lookup
 from redfish_inspector.redfish import NetworkAdapter, NetworkPort, PcieDevice
 
 
@@ -116,19 +115,14 @@ class ChameleonBaremetal(G5kNode):
 
     def set_processor(self, proc: Processor):
 
+        self.processor = {}
         proc_dict = proc.json
-        proc_default_class = lookup.CPU_MODEL_MAPPING.get(proc.model)
-        try:
-            self.processor = proc_default_class.get_reference_json()
-        except AttributeError:
-            print(json.dumps(proc.json, indent=2))
-            raise
 
         delloem: Mapping = (
             proc_dict.get("Oem", {}).get("Dell", {}).get("DellProcessor", {})
         )
         redfish_values = {
-            "other_description": proc.model,
+            "model": proc.model,
             "vendor": proc.manufacturer,
             "version": proc_dict.get("Version"),
             "clock_speed": int(delloem.get("CurrentClockSpeedMhz", 0) * 1e6),
@@ -299,7 +293,7 @@ class ChameleonBaremetal(G5kNode):
         elif "R840" in chassis_model:
             node_class = "compute_nvdimm"
 
-        cpu_model: str = self.processor.get("other_description")
+        cpu_model: str = self.processor.get("model")
         if "Gold 6126" in cpu_model:
             cpu_series = "skylake"
         if "Gold 6240R" in cpu_model:
