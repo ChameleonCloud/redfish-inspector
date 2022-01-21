@@ -33,6 +33,7 @@ GPU_MAPPING = {
     "TU102GL [Quadro RTX 6000/8000]": "RTX 6000",
     "GV100GL [Tesla V100 SXM2 32GB]": "V100",
     "GV100GL [Tesla V100 PCIe 32GB]": "V100",
+    "Arcturus GL-XL [AMD Instinct MI100]": "MI100",
 }
 
 
