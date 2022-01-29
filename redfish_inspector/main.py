@@ -46,6 +46,12 @@ def run():
     )
 
     parser.add_argument(
+        "--all",
+        action="store_true",
+        help="scan all registered nodes",
+    )
+
+    parser.add_argument(
         "--output-path",
         type=Path,
         default=".",
@@ -73,7 +79,7 @@ def run():
             future_to_result = {
                 executor.submit(get_node_info, node, args): node
                 for node in nodes
-                if (node.name.lower() in args.node_names)
+                if (node.name.lower() in args.node_names) or args.all
             }
             for future in concurrent.futures.as_completed(future_to_result):
                 try:
