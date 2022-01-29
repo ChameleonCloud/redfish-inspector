@@ -131,6 +131,7 @@ class ChameleonBaremetal(G5kNode):
             "cache_l1": int(delloem.get("Cache1SizeKB", 0) * 1e3),
             "cache_l2": int(delloem.get("Cache2SizeKB", 0) * 1e3),
             "cache_l3": int(delloem.get("Cache3SizeKB", 0) * 1e3),
+            "instruction_set": proc_dict.get("InstructionSet"),
         }
 
         for k, v in redfish_values.items():
