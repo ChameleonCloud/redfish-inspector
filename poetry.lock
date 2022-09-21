@@ -45,7 +45,7 @@ tomli = ">=0.2.6,<2.0.0"
 typed-ast = {version = ">=1.4.2", markers = "python_version < \"3.8\" and implementation_name == \"cpython\""}
 typing-extensions = [
     {version = ">=3.10.0.0", markers = "python_version < \"3.10\""},
-    {version = "!=3.10.0.1", markers = "python_version >= \"3.10\""},
+    {version = ">=3.10.0.0,<3.10.0.1 || >3.10.0.1", markers = "python_version >= \"3.10\""},
 ]
 
 [package.extras]
@@ -700,7 +700,7 @@ pbr = ">=2.0.0,<2.1.0 || >2.1.0"
 
 [[package]]
 name = "sushy"
-version = "3.12.2"
+version = "4.3.0"
 description = "Sushy is a small Python library to communicate with Redfish based systems"
 category = "main"
 optional = false
@@ -780,7 +780,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "7b4b984f69a9b44640324bc80b9242c0b8a84fe3f7429d92ab8574efd188bf2d"
+content-hash = "4cf3eadb839e35674734a61dc4e67309e0592ba79dbf31aa6ddf3745ccc048e0"
 
 [metadata.files]
 appdirs = [
@@ -1245,8 +1245,8 @@ stevedore = [
     {file = "stevedore-3.5.0.tar.gz", hash = "sha256:f40253887d8712eaa2bb0ea3830374416736dc8ec0e22f5a65092c1174c44335"},
 ]
 sushy = [
-    {file = "sushy-3.12.2-py3-none-any.whl", hash = "sha256:6dfd5232c1d0f355207dd98f021070f65666af6f0ae5ad52a2bcbd11da44f137"},
-    {file = "sushy-3.12.2.tar.gz", hash = "sha256:0b58b95b6d0788d80938428ebe659832b69fbafc6f321692baf434d64fc795ee"},
+    {file = "sushy-4.3.0-py3-none-any.whl", hash = "sha256:9bec5c61d710c0f41bad335ad5acd989c831124863be19a0a28410f9499ca849"},
+    {file = "sushy-4.3.0.tar.gz", hash = "sha256:7a46c423c1f7084f5059b41c1e81096462851218a5753c17e0ee6470cd7cc988"},
 ]
 tomli = [
     {file = "tomli-1.2.3-py3-none-any.whl", hash = "sha256:e3069e4be3ead9668e21cb9b074cd948f7b3113fd9c8bba083f48247aab8b11c"},
