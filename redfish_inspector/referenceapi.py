@@ -34,6 +34,8 @@ GPU_MAPPING = {
     "GV100GL [Tesla V100 SXM2 32GB]": "V100",
     "GV100GL [Tesla V100 PCIe 32GB]": "V100",
     "Arcturus GL-XL [AMD Instinct MI100]": "MI100",
+    "GA100 [A100 PCIe 80GB]": "A100_pcie",
+    "GA100 [A100 SXM4 80GB]": "A100_nvlink"
 }
 
 
