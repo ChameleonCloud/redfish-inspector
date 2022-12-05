@@ -1,9 +1,11 @@
 #!python3
 
 import json
+import logging
 from typing import List, Mapping
 
 from openstack.baremetal.v1.node import Node
+from sushy import exceptions as s_exec
 from sushy import utils
 from sushy.resources.chassis.chassis import Chassis
 from sushy.resources.system import processor
@@ -11,6 +13,7 @@ from sushy.resources.system.processor import Processor
 from sushy.resources.system.storage.drive import Drive
 from sushy.resources.system.system import System
 
+from redfish_inspector import constants as reference_constants
 from redfish_inspector.redfish import NetworkAdapter, NetworkPort, PcieDevice
 
 
@@ -28,15 +31,6 @@ FPGA_MAPPING = {
     }
 }
 
-# Map reported codename to friendly name
-GPU_MAPPING = {
-    "TU102GL [Quadro RTX 6000/8000]": "RTX 6000",
-    "GV100GL [Tesla V100 SXM2 32GB]": "V100",
-    "GV100GL [Tesla V100 PCIe 32GB]": "V100",
-    "Arcturus GL-XL [AMD Instinct MI100]": "MI100",
-    "GA100 [A100 PCIe 80GB]": "A100_pcie",
-    "GA100 [A100 SXM4 80GB]": "A100_nvlink"
-}
 
 
 class G5kNode:
@@ -245,14 +239,25 @@ class ChameleonBaremetal(G5kNode):
 
     def get_gpus(self):
 
-        for device in self.pcie_devices:
-            if device.get("name") in GPU_MAPPING.keys():
-                gpu_model = GPU_MAPPING[device.get("name")]
-                self.gpu["gpu"] = True
-                self.gpu["gpu_model"] = gpu_model
-                self.gpu["gpu_name"] = device.get("name")
-                self.gpu["gpu_vendor"] = device.get("manufacturer")
-                self.gpu["gpu_count"] = self.gpu.get("gpu_count", 0) + 1
+        for d in self.pcie_devices:
+            if d.get("device_class") == reference_constants.GPUDevice.device_class:
+                matched_gpus = [g for g in reference_constants.GPU_CLASS_LIST if (g.VendorID == d.get("VendorID")) and (g.DeviceID == d.get("DeviceID"))]
+                num_matches = len(matched_gpus)
+                if num_matches == 1:
+                    matched_gpu = matched_gpus[0]
+                    if matched_gpu.ignore:
+                        continue
+                    else:
+                        self.gpu["gpu"] = True
+                        self.gpu["gpu_model"] = matched_gpu.name
+                        self.gpu["gpu_name"] =  matched_gpu.friendly_name
+                        self.gpu["gpu_vendor"] = matched_gpu.manufacturer
+                        self.gpu["gpu_count"] = self.gpu.get("gpu_count", 0) + 1
+                elif num_matches > 1:
+                    logging.warn(f"Multiple matches found, {d} matched {matched_gpus}")
+                elif num_matches == 0:
+                    logging.warn(f"GPU found but not matched for device {d}")
+
 
     def get_fgpas(self):
         for device in self.pcie_devices:
