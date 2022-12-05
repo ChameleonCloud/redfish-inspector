@@ -11,6 +11,7 @@ from typing import List, Mapping
 
 import openstack
 import sushy
+import urllib3
 from openstack import connection
 from openstack.baremetal.v1.node import Node
 from openstack.baremetal.v1.port import Port
@@ -30,6 +31,7 @@ from redfish_inspector.redfish import (
 # Initialize and turn on debug logging
 openstack.enable_logging(debug=False)
 logging.captureWarnings(True)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 CHASSIS_PATH = "/redfish/v1/Chassis/System.Embedded.1"
 
