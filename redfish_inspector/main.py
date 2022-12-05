@@ -187,3 +187,7 @@ def get_node_info(node: Node, args: argparse.Namespace):
     with open(output_file, "w+") as f:
         json.dump(output_dict, f, indent=2, sort_keys=True)
         print(f"generated {output_file}")
+
+
+if __name__ == "__main__":
+    run()
