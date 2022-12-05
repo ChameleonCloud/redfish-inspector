@@ -1,0 +1,51 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    // gpu_p100_v100 c11-14
+    // p100_nvlink c11-04, c11-01
+    // p100 c11-22
+    // k80 c11-23
+    // m40 c11-06
+    // mi100 c03-03
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Inspect Selected",
+            "type": "python",
+            "request": "launch",
+            "program": "redfish_inspector/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--output","../reference-repository/data/chameleoncloud/sites/tacc/clusters/chameleon/nodes/",
+                "--name","liqid01",
+                "--name","liqid02",
+                "--name","liqid03",
+                "--name","liqid04",
+                "--name","liqid05",
+                "--name","liqid06",
+                "--name","liqid07",
+                "--name","liqid08",
+                "--name", "c11-14",
+                "--name", "c11-23",
+                "--name", "c11-06",
+                "--name", "c03-03",
+                "--name", "c11-01",
+                "--name", "c11-22",
+            ]
+        },
+        {
+            "name": "Inspect All",
+            "type": "python",
+            "request": "launch",
+            "program": "redfish_inspector/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--output","../reference-repository/data/chameleoncloud/sites/tacc/clusters/chameleon/nodes/",
+                "--all"
+            ]
+        }
+    ]
+}
