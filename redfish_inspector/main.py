@@ -115,6 +115,11 @@ def get_node_info(node: Node, args: argparse.Namespace):
 
     print(f"querying {node.name} at {bmc_addr}")
     system = conn.get_system()
+
+    if system.redfish_version and system.redfish_version <= "1.0.2":
+        logging.warn(f"Node {node.name} does not have a supported redfish version")
+        return None
+
     reference_node.set_arch(system)
     reference_node.set_bios(system)
     reference_node.set_memory(system)
